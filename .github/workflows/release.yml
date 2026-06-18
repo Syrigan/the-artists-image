@@ -5,24 +5,38 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.1.0) — creates tag v<version> if it does not exist'
+        required: true
+        default: '0.1.0'
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
+    name: Build (${{ matrix.label }})
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: macos-latest
-            args: '--target aarch64-apple-darwin'
+            target: aarch64-apple-darwin
+            label: macOS arm64
           - platform: macos-latest
-            args: '--target x86_64-apple-darwin'
+            target: x86_64-apple-darwin
+            label: macOS x86_64
           - platform: ubuntu-22.04
-            args: ''
+            target: ''
+            label: Linux
           - platform: windows-latest
-            args: ''
+            target: ''
+            label: Windows
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -48,37 +62,33 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - name: Install Rust targets
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            rustup target add ${{ matrix.target }}
+          fi
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
 
-      - name: Setup Python (for sidecar)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Install frontend deps
         run: npm ci
-
-      - name: Build Python sidecar
-        run: |
-          python -m venv .venv
-          . .venv/bin/activate || .venv\Scripts\activate
-          pip install -r src-tauri/sidecar/requirements.txt
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: ${{ github.ref_name }}
-          releaseBody: 'See the assets below to download the installer / app bundle for your platform.'
-          releaseDraft: true
+          tagName: v${{ inputs.version || github.ref_name }}
+          releaseName: v${{ inputs.version || github.ref_name }}
+          releaseBody: |
+            Ready-to-run installers for The Artist's Image.
+
+            - **Windows**: download the `.msi` (installer) or `.exe`
+            - **macOS**: download the `.dmg` or `.app.tar.gz`. The app is unsigned — first launch needs right-click → Open
+            - **Linux**: download the `.deb` (Debian/Ubuntu) or `.AppImage`
+          releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
+          args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
