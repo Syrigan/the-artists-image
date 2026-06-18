@@ -62,7 +62,7 @@ src-tauri/            Rust backend (Tauri commands, ASCII renderer, export)
   sidecar/            Python AZLyrics scraper (bundled as a Tauri resource)
 ```
 
-## Lyrics Fetching
+## ~~Lyrics Fetching~~ This thing broken AF. I am NOT fix ts.
 
 The "fetch" tab in the lyrics panel runs a small Python sidecar
 (`src-tauri/sidecar/scraper.py`) that scrapes AZLyrics. It is built into the
